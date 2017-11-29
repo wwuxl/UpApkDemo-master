@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://E:\DownDemo\UpApkDemo-master\UpApkDemo.iml" filepath="E:\DownDemo\UpApkDemo-master\UpApkDemo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/UpApkDemo-master.iml" filepath="$PROJECT_DIR$/UpApkDemo-master.iml" />
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://E:\DownDemo\UpApkDemo-master\app\app.iml" filepath="E:\DownDemo\UpApkDemo-master\app\app.iml" />
+    </modules>
+  </component>
+</project>
