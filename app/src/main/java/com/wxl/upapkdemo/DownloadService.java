@@ -1,22 +1,25 @@
 package com.wxl.upapkdemo;
 
 import android.app.DownloadManager;
-import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.widget.Toast;
+
+import com.wxl.upapkdemo.receiver.ClickReceiver;
+import com.wxl.upapkdemo.receiver.CompleteReceiver;
 
 import java.io.File;
 
@@ -31,7 +34,7 @@ import zlc.season.rxdownload.RxDownload;
  * Created by wxl on 2017/11/29.
  */
 
-public class DownloadService extends IntentService {
+public class DownloadService extends Service {
     private Intent updateIntent;
     private PendingIntent pendingIntent;
     private int notification_id = 0;
@@ -47,13 +50,20 @@ public class DownloadService extends IntentService {
     private String statusMsg;
     private String fileUri;
 
-    public DownloadService() {
-        super("DownloadService");
-    }
 
     @Override
     public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
         Log.e("===", "DownloadService thread= " + Thread.currentThread().getName());
+        //方式一
+        //downloadApk1();
+        //方式二 使用下载管理器下载(apk)
+        downloadApk();
+
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+
+    private void downloadApk1(){
         //方式一 自己实现下载apk(通知)
         mBuilder = new NotificationCompat.Builder(this);
         mBuilder.setSmallIcon(R.mipmap.ic_launcher);
@@ -63,15 +73,7 @@ public class DownloadService extends IntentService {
         mBuilder.setProgress(100, 0, false);
         mManager.notify(notification_id, mBuilder.build());
 
-        //方式二 使用下载管理器下载(apk)
-        downloadApk();
 
-        return super.onStartCommand(intent, flags, startId);
-    }
-
-    @Override
-    protected void onHandleIntent(@Nullable Intent intent) {
-        //Log.e("===", "thread= " + Thread.currentThread().getName());
 
         //方式一 自己实现下载apk(下载过程)
         String baseUrl1 = baseUrl + "jingdong_53712.apk";
@@ -158,6 +160,12 @@ public class DownloadService extends IntentService {
         Log.e("===", "service onDestroy");
     }
 
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
     private void downloadApk() {
         String baseUrl2 = baseUrl + "jingdong_53712.apk";
         mDownloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
@@ -173,97 +181,21 @@ public class DownloadService extends IntentService {
         request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);//下载完成也会持续显示
         reference = mDownloadManager.enqueue(request);//得到下载文件的唯一id
 
-        initFinishRecicever();
-        initNotificationClickReceiver();
+        initNotificationReceiver();
     }
 
     /**
-     * 接收下载完成后的广播
+     * 接收DownloadManager发出的的广播
      */
-    private void initFinishRecicever() {
-        IntentFilter intentFilter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-
-        receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                long references = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-                if (references == reference) {
-                    Toast.makeText(DownloadService.this, "下载完成", Toast.LENGTH_SHORT).show();
-                }
-            }
-        };
-        registerReceiver(receiver, intentFilter);
-    }
-    /**
-     * 接收通知栏点击后发出的的广播
-     */
-    private void initNotificationClickReceiver() {
+    private void initNotificationReceiver() {
+        //接收通知栏点击后发出的的广播
         IntentFilter intentFilter = new IntentFilter(DownloadManager.ACTION_NOTIFICATION_CLICKED);
-        clickedReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                String extraId = DownloadManager.EXTRA_NOTIFICATION_CLICK_DOWNLOAD_IDS;
-                long[] references = intent.getLongArrayExtra(extraId);
-                for (long refer : references) {
-                    if (refer == reference) {
-                        initDownLoadUri(refer);
-                        if ("STATUS_SUCCESSFUL".equals(statusMsg)) {
-                            //installFile();
-                            startActivity(new File(fileName));
-                        } else {
-                            Toast.makeText(DownloadService.this, "下载还未完成", Toast.LENGTH_SHORT).show();
-                        }
-                        myDownload.close();
-                    }
-                }
-            }
-        };
-        registerReceiver(clickedReceiver, intentFilter);
+        ClickReceiver clickReceiver =new ClickReceiver(reference,mDownloadManager);
+        registerReceiver(clickReceiver, intentFilter);
+        //接收下载完成后的广播
+        IntentFilter intentFilter1 = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        CompleteReceiver completeReceiver = new CompleteReceiver(reference);
+        registerReceiver(completeReceiver, intentFilter1);
     }
 
-    /**
-     * 用户查询文件下载地址的索引
-     */
-    private Cursor myDownload;
-
-    /**
-     * 查询文件下载地址和下载进度 * * @param re
-     */
-    private void initDownLoadUri(long re) {
-        //下载管理查询,得到文件下载地址
-        DownloadManager.Query myDownloadQuery = new DownloadManager.Query();
-        myDownloadQuery.setFilterById(re);
-        myDownload = mDownloadManager.query(myDownloadQuery);
-
-        if (myDownload.moveToFirst()) {
-            int fileNameIdx = myDownload.getColumnIndex(DownloadManager.COLUMN_LOCAL_FILENAME);
-            int fileUriIdx = myDownload.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-            //文件名称/storage/sdcard0/DCIM/huge-5.jpg
-            fileName = myDownload.getString(fileNameIdx);
-            //文件地址   file:///storage/sdcard0/DCIM/huge-5.jpg
-
-            fileUri = myDownload.getString(fileUriIdx);        //得到当前状态
-
-            int status = myDownload.getInt(myDownload.getColumnIndex(DownloadManager.COLUMN_STATUS));
-            switch (status) {
-                case DownloadManager.STATUS_PAUSED:
-                    statusMsg = "STATUS_PAUSED";
-                case DownloadManager.STATUS_PENDING:
-                    statusMsg = "STATUS_PENDING";
-                case DownloadManager.STATUS_RUNNING:
-                    statusMsg = "STATUS_RUNNING";
-                    break;
-                case DownloadManager.STATUS_SUCCESSFUL:
-                    statusMsg = "STATUS_SUCCESSFUL";
-                    break;
-                case DownloadManager.STATUS_FAILED:
-                    statusMsg = "STATUS_FAILED";
-                    break;
-                default:
-                    statusMsg = "未知状态";
-                    break;
-            }
-            System.out.println("下载完成" + fileName + ": " + fileUri + "Uri.fromFile(new File(fileName)" + Uri.parse(fileUri));
-        }
-    }
 }
