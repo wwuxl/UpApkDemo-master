@@ -34,7 +34,8 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <activity android:name=".DownloadActivity">
+        <activity android:name=".DownloadActivity"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="com.wxl.download"/>
                 <category android:name=" android.intent.category.DEFAULT" />
