@@ -21,6 +21,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     private static final int NOTIFICATION_PRE = 1; //上一首
     private static final int NOTIFICATION_NEXT = 2; //下一首
     private static final int NOTIFICATION_OPEN = 3; //打开歌曲
+    private RemoteViews mRemoteViews;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,7 +71,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 //                Log.e("===", "onFailure " + t.getMessage());
 //            }
 //        });
-
+        //createCustomNotification();
     }
     private void createCustomNotification() {
         Intent intent = new Intent(this, DownloadActivity.class);
@@ -95,16 +96,17 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
      * @return
      */
     public RemoteViews getRemoteView() {
-        RemoteViews remoteViews = new RemoteViews(getPackageName(), R.layout.custom_notification);
-        remoteViews.setTextViewText(R.id.tv_content_title, "歌曲名");
-        remoteViews.setTextViewText(R.id.tv_content_text, "歌手");
+        mRemoteViews = new RemoteViews(getPackageName(), R.layout.custom_notification);
+        mRemoteViews.setTextViewText(R.id.tv_content_title, "歌曲名1");
+        mRemoteViews.setTextViewText(R.id.tv_content_text, "歌手1");
+        mRemoteViews.setProgressBar(R.id.progressBar,100,20,false);
         //打开上一首
-        remoteViews.setOnClickPendingIntent(R.id.btn_pre, getClickPendingIntent(NOTIFICATION_PRE));
+        //mRemoteViews.setOnClickPendingIntent(R.id.btn_pre, getClickPendingIntent(NOTIFICATION_PRE));
         //打开下一首
-        remoteViews.setOnClickPendingIntent(R.id.btn_next, getClickPendingIntent(NOTIFICATION_NEXT));
+        mRemoteViews.setOnClickPendingIntent(R.id.btn_next, getClickPendingIntent(NOTIFICATION_NEXT));
         //点击整体布局时,打开播放器
-        remoteViews.setOnClickPendingIntent(R.id.ll_root, getClickPendingIntent(NOTIFICATION_OPEN));
-        return remoteViews;
+        mRemoteViews.setOnClickPendingIntent(R.id.ll_root, getClickPendingIntent(NOTIFICATION_OPEN));
+        return mRemoteViews;
     }
 
     /**
@@ -118,6 +120,8 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         intent.putExtra("cmd", what);
         int flag = PendingIntent.FLAG_UPDATE_CURRENT;
         PendingIntent clickIntent = PendingIntent.getActivity(this, what, intent, flag );
+
+
         return clickIntent;
     }
 

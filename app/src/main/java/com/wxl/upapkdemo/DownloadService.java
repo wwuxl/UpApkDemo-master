@@ -16,10 +16,12 @@ import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.widget.RemoteViews;
 import android.widget.Toast;
 
 import com.wxl.upapkdemo.receiver.ClickReceiver;
 import com.wxl.upapkdemo.receiver.CompleteReceiver;
+import com.wxl.upapkdemo.uilts.MoneyUtils;
 
 import java.io.File;
 
@@ -38,7 +40,6 @@ public class DownloadService extends Service {
     private Intent updateIntent;
     private PendingIntent pendingIntent;
     private int notification_id = 0;
-    private Notification mNotification;
     private String baseUrl = "http://192.168.120.26:8080/";
     private NotificationCompat.Builder mBuilder;
     private NotificationManager mManager;
@@ -49,35 +50,50 @@ public class DownloadService extends Service {
     private String fileName;
     private String statusMsg;
     private String fileUri;
+    private RemoteViews mRemoteViews;
+    private static final int NOTIFICATION_PRE = 1; //上一首
+    private static final int NOTIFICATION_NEXT = 2; //下一首
+    private static final int NOTIFICATION_OPEN = 3; //打开歌曲
+    private Notification mNotification;
+    private Subscription mSubscription;
 
 
     @Override
     public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
         Log.e("===", "DownloadService thread= " + Thread.currentThread().getName());
         //方式一
-        //downloadApk1();
+        downloadApk1();
         //方式二 使用下载管理器下载(apk)
-        downloadApk();
+        //downloadApk();
 
         return super.onStartCommand(intent, flags, startId);
     }
 
 
-    private void downloadApk1(){
-        //方式一 自己实现下载apk(通知)
-        mBuilder = new NotificationCompat.Builder(this);
-        mBuilder.setSmallIcon(R.mipmap.ic_launcher);
-        mBuilder.setContentTitle("下载");
-        mBuilder.setContentText("正在下载0%");
+    private void downloadApk1() {
         mManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        mBuilder.setProgress(100, 0, false);
-        mManager.notify(notification_id, mBuilder.build());
+        //方式一 自己实现下载apk(系统通知)
+//        mBuilder = new NotificationCompat.Builder(this);
+//        mBuilder.setSmallIcon(R.mipmap.ic_launcher);
+//        mBuilder.setContentTitle("下载");
+//        mBuilder.setContentText("正在下载0%");
+//        mBuilder.setProgress(100, 0, false);
+//        mManager.notify(notification_id, mBuilder.build());
 
+
+        //自定义通知
+        createCustomNotification();
+        initNotificationReceiver();
 
 
         //方式一 自己实现下载apk(下载过程)
         String baseUrl1 = baseUrl + "jingdong_53712.apk";
-        final Subscription subscription = RxDownload.getInstance()
+        //Log.e("===", "onCompleted thread" + Thread.currentThread().getName());
+        //打开安装界面
+        //startActivity(file);
+        // mBuilder.setProgress(100, progress, false);
+        // mBuilder.setContentText("正在下载" + progress + "%");
+        mSubscription = RxDownload.getInstance()
                 .defaultSavePath(createFile())
                 .download(baseUrl1, "123456789.apk", null)
                 .subscribeOn(Schedulers.io())
@@ -99,20 +115,89 @@ public class DownloadService extends Service {
 
                     @Override
                     public void onNext(final DownloadStatus status) {
-                        Log.e("==", "onNext thread=" + Thread.currentThread().getName());
-                        Log.e("===", "=progress==" + status.getDownloadSize());
                         int progress = (int) ((double) status.getDownloadSize() / (double) status.getTotalSize() * 100d + 0.5d);
-                        Log.e("===", "progress=" + progress);
-                        mBuilder.setProgress(100, progress, false);
-                        mBuilder.setContentText("正在下载" + progress + "%");
+                        //Log.e("===", "progress=" + progress);
+                        // mBuilder.setProgress(100, progress, false);
+                        // mBuilder.setContentText("正在下载" + progress + "%");
+                        mRemoteViews.setProgressBar(R.id.progressBar, 100, progress, false);
+                        String downSize = MoneyUtils.getMoney(status.getDownloadSize() / 1024.0f / 1024.0f);
+                        String toTalSize = MoneyUtils.getMoney(status.getTotalSize() / 1024.0f / 1024.0f);
+                        mRemoteViews.setTextViewText(R.id.tv_content_text, (downSize + "MB/" + toTalSize + "MB"));
                         if (progress == 100) {
-                            mBuilder.setContentText("下载完成" + progress + "%");
-                            mManager.cancel(notification_id);
+                            mRemoteViews.setTextViewText(R.id.tv_content_text, "下载完成");
                         }
-                        mManager.notify(notification_id, mBuilder.build());
+                        mManager.notify(111, mNotification);
                     }
                 });
 
+    }
+
+    private void createCustomNotification() {
+        Intent intent = new Intent(this, DownloadActivity.class);
+        //如果第二次获取并且请求码相同,如果原来已解决创建了这个PendingIntent,则复用这个类,并更新intent
+        int flag = PendingIntent.FLAG_UPDATE_CURRENT;
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 3, intent, flag);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setTicker("当前正在播放..")
+                .setWhen(System.currentTimeMillis())
+                .setContentTitle("歌曲名")
+                .setContentText("歌手") //以上的设置是在为了兼容3.0之前的版本
+                .setContentIntent(contentIntent)
+                .setContent(getRemoteView()); //自定义通知栏view的api是在3.0之后生效
+        mNotification = builder.build();
+        //打开通知
+        mManager.notify(111, mNotification);
+    }
+
+    /**
+     * 创建RemoteViews,3.0之后版本使用
+     *
+     * @return
+     */
+    public RemoteViews getRemoteView() {
+        mRemoteViews = new RemoteViews(getPackageName(), R.layout.custom_notification);
+        mRemoteViews.setTextViewText(R.id.tv_content_title, "歌曲名1");
+        mRemoteViews.setTextViewText(R.id.tv_content_text, "歌手1");
+        mRemoteViews.setProgressBar(R.id.progressBar, 100, 0, false);
+        //打开上一首
+        //mRemoteViews.setOnClickPendingIntent(R.id.btn_pre, getClickPendingIntent(NOTIFICATION_PRE));
+        //打开下一首
+        mRemoteViews.setOnClickPendingIntent(R.id.btn_next, getClickPendingIntent(NOTIFICATION_NEXT));
+        //点击整体布局时,打开播放器
+        mRemoteViews.setOnClickPendingIntent(R.id.ll_root, getClickPendingIntent(NOTIFICATION_OPEN));
+
+
+
+        return mRemoteViews;
+    }
+
+    /**
+     * 获取点击自定义通知栏上面的按钮或者布局时的延迟意图
+     *
+     * @param what 要执行的指令
+     * @return
+     */
+    public PendingIntent getClickPendingIntent(int what) {
+        //mRemoteViews.setProgressBar(R.id.progressBar,100,50,false);
+        PendingIntent clickIntent=null;
+        Log.e("===","what="+what);
+//        if(what==NOTIFICATION_NEXT){
+//            //取消订阅, 即可暂停下载, 若服务端不支持断点续传,下一次下载会重新下载,反之会继续下载
+//            if (mSubscription != null && !mSubscription.isUnsubscribed()) {
+                Log.e("===","暂停");
+//                mSubscription.unsubscribe();
+//            }
+//            return null;
+//        }else{
+
+            Intent intent = new Intent(this, DownloadActivity.class);
+            intent.putExtra("cmd", what);
+            int flag = PendingIntent.FLAG_UPDATE_CURRENT;
+            clickIntent = PendingIntent.getActivity(this, what, intent, flag);
+        //}
+
+        return clickIntent;
     }
 
     String savePath;
@@ -190,7 +275,7 @@ public class DownloadService extends Service {
     private void initNotificationReceiver() {
         //接收通知栏点击后发出的的广播
         IntentFilter intentFilter = new IntentFilter(DownloadManager.ACTION_NOTIFICATION_CLICKED);
-        ClickReceiver clickReceiver =new ClickReceiver(reference,mDownloadManager);
+        ClickReceiver clickReceiver = new ClickReceiver(reference, mDownloadManager);
         registerReceiver(clickReceiver, intentFilter);
         //接收下载完成后的广播
         IntentFilter intentFilter1 = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
